@@ -189,6 +189,7 @@ h3 {
     border-radius: 24px;
     font-weight: 600;
     line-height: 1.2;
+    white-space: nowrap;
 }
 
 .primary {
@@ -421,6 +422,31 @@ dialog::backdrop {
     font-size: 20px;
     font-weight: 600;
     text-overflow: ellipsis;
+}
+
+/* Сегодня */
+#today-date {
+    margin-bottom: 6px;
+}
+
+.actions {
+    position: sticky;
+    bottom: var(--nav-height);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 16px 0 12px;
+    background: linear-gradient(transparent, var(--bg) 16px);
+}
+
+.status {
+    align-self: flex-start;
+    padding: 4px 12px;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent);
+    font-size: 15px;
 }
 
 /* Каталог */

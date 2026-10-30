@@ -86,6 +86,32 @@ const NON_EMPTY_FIELDS = ["areas", "instructions", "safety"];
 
 // Manual interest marks cycle: none → like → dislike → none
 const NEXT_MANUAL = {like: "dislike", dislike: null};
+// Manual marks override scores inferred from feedback; all preference scores are in -100…100
+const MANUAL_SCORE = {like: 100, dislike: -100};
+
+// Recommendation score is a weighted sum of components, each in the 0–100 range
+const RECOMMENDATION_WEIGHTS = {
+    age: 0.2,
+    skill: 0.2,
+    interest: 0.2,
+    feedback: 0.2,
+    diversity: 0.1,
+    practical: 0.1,
+};
+
+const HISTORY_DAYS = 7; // days of history used for repetition and diversity
+const SAME_ACTIVITY_PENALTY = 60; // points, fades over HISTORY_DAYS
+const SIMILAR_ACTIVITY_PENALTY = 20; // points, scaled by similarity
+const NOVELTY_BONUS = 10; // activity not recommended to the child before
+const EXPLORE_BONUS = 5; // activity with an interest the child has no observations for yet
+
+// Skills that are just appearing are the most relevant. Unobserved skills stay neutral and never exclude an activity.
+const SKILL_RELEVANCE = {unknown: 60, emerging: 100, developing: 85, confident: 40};
+// Difficulty that suits an observed skill level
+const SKILL_DIFFICULTY = {emerging: 0, developing: 1, confident: 2};
+const DIFFICULTY_LEVEL = {easy: 0, medium: 1, challenging: 2};
+
+const FINISHED = ["completed", "partially_completed", "not_completed"];
 
 // ==========================================================================
 // 2. TRANSLATIONS
@@ -115,6 +141,24 @@ const STRINGS = {
         storageError: "Не удалось сохранить данные: в браузере закончилось место.",
 
         /* --- Today --- */
+        noActivityTitle: "Сейчас нет подходящих занятий",
+        noActivityText:
+            "Приложение предлагает только занятия, которые подходят по возрасту и условиям " +
+            "и прошли проверку безопасности. Сейчас таких нет. Можно посмотреть каталог " +
+            "или изменить условия в профиле ребёнка.",
+        browseCatalogue: "Открыть каталог",
+        moreDetails: "Подробнее о занятии",
+        start: "Начать",
+        another: "Другое занятие",
+        noAlternative: "Других подходящих занятий на сегодня нет.",
+        statuses: {
+            recommended: "Рекомендовано",
+            in_progress: "Идёт занятие",
+            completed: "Выполнено",
+            partially_completed: "Выполнено частично",
+            not_completed: "Не получилось",
+            replaced: "Заменено",
+        },
         welcomeTitle: "Здравствуйте!",
         welcomeText: "Добавьте профиль ребёнка, и приложение будет каждый день предлагать одно подходящее занятие.",
         localDataNote: "Все данные хранятся только на этом устройстве и никуда не отправляются.",
@@ -279,6 +323,8 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 
 const now = () => new Date().toISOString();
 
+const average = (values) => values.reduce((sum, x) => sum + x, 0) / values.length;
+
 const toggle = (list, item) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
 
 // Calendar days are local YYYY-MM-DD strings, never UTC conversions
@@ -349,6 +395,14 @@ const navButtons = [...nav.querySelectorAll("button")];
 /* --- Today --- */
 const todayDate = $("today-date");
 const welcome = $("welcome");
+const todayEmpty = $("today-empty");
+const todayEmptyText = $("today-empty-text");
+const todayActivity = $("today-activity");
+const todayBody = $("today-body");
+const todayDetails = $("today-details");
+const todayStatus = $("today-status");
+const todayMain = $("today-main");
+const todayAnother = $("today-another");
 
 /* --- Child --- */
 const childNone = $("child-none");
@@ -546,7 +600,184 @@ const findActivity = (id) => catalogue.find((a) => a.id === id);
 const isAvailable = (activity) => activity?.enabled === true && activity.safetyReviewed === true;
 
 // ==========================================================================
-// 9. UI COMPONENTS
+// 9. RECOMMENDATIONS
+// ==========================================================================
+
+const tagsOf = (a) => [...a.areas, ...a.skillTags, ...a.interestTags];
+
+// Share of common tags: 1 for the same activity, 0 for unrelated ones
+const similarity = (a, b) => {
+    const tags = new Set(tagsOf(a));
+    const other = tagsOf(b);
+    const common = other.filter((tag) => tags.has(tag)).length;
+    return common / (tags.size + other.length - common);
+};
+
+/* --- Step 1: filter. Incomplete activities are already left out when the catalogue loads. --- */
+
+const fitsConditions = (a, {environment, intensity}) =>
+    (environment === "either" || a.environment === "either" || a.environment === environment) &&
+    (intensity === "either" || a.intensity === intensity);
+
+const isEligible = (a, child, months) =>
+    isAvailable(a) && months >= a.ageMinMonths && months <= a.ageMaxMonths && fitsConditions(a, child.conditions);
+
+/* --- Step 2: score --- */
+
+const preferenceScore = (p) => (p.manual ? MANUAL_SCORE[p.manual] : p.score);
+
+// Preference scores of a child grouped by kind: {interest: {music: 25}, activity: {...}, difficulty: {...}}
+const preferencesOf = (childId) => {
+    const prefs = {interest: {}, activity: {}, difficulty: {}};
+    data.preferences
+        .filter((p) => p.childId === childId)
+        .forEach((p) => (prefs[p.kind][p.id] = preferenceScore(p)));
+    return prefs;
+};
+
+// Activities aimed at the middle of the age range fit best
+const ageFit = (a, months) => {
+    const center = (a.ageMinMonths + a.ageMaxMonths) / 2;
+    const half = (a.ageMaxMonths - a.ageMinMonths) / 2 || 1;
+    return 100 - 40 * Math.min(1, Math.abs(months - center) / half);
+};
+
+// Relevance of the activity's skills plus how well its difficulty suits the observed levels.
+// "Too easy" and "too hard" feedback shifts the suitable difficulty per area.
+const skillFit = (a, child, prefs) => {
+    const levels = a.skillTags.map((id) => skillLevel(child, id));
+    const relevance = levels.length ? average(levels.map((level) => SKILL_RELEVANCE[level])) : SKILL_RELEVANCE.unknown;
+    const known = levels.filter((level) => level !== "unknown");
+    const base = known.length ? average(known.map((level) => SKILL_DIFFICULTY[level])) : DIFFICULTY_LEVEL.medium;
+    const shift = average(a.areas.map((area) => prefs.difficulty[area] ?? 0)) / 100;
+    const difficultyFit = Math.max(0, 100 - 40 * Math.abs(DIFFICULTY_LEVEL[a.difficulty] - base - shift));
+    return (relevance + difficultyFit) / 2;
+};
+
+const interestFit = (a, prefs) =>
+    a.interestTags.length ? 50 + average(a.interestTags.map((tag) => prefs.interest[tag] ?? 0)) / 2 : 50;
+
+// Liked and disliked activities raise and lower similar ones: the more similar, the stronger
+const feedbackFit = (a, prefs) => {
+    let sum = 0;
+    let weight = 0;
+    for (const [id, score] of Object.entries(prefs.activity)) {
+        const other = findActivity(id);
+        if (!other) continue;
+        const w = similarity(a, other);
+        sum += w * score;
+        weight += w;
+    }
+    return 50 + sum / Math.max(1, weight) / 2;
+};
+
+// Areas that got less attention recently score higher
+const diversity = (a, areaCounts) => {
+    const max = Math.max(1, ...Object.values(areaCounts));
+    return 100 - 100 * average(a.areas.map((area) => (areaCounts[area] ?? 0) / max));
+};
+
+const practicalFit = (a, {duration, materials}) => {
+    const time = !duration || a.duration <= duration ? 100 : Math.max(0, 100 - 10 * (a.duration - duration));
+    const available = a.materials.filter((m) => materials.includes(m)).length;
+    // materials the parent has not listed are unknown rather than missing
+    const things = !a.materials.length ? 100 : materials.length ? (100 * available) / a.materials.length : 70;
+    return (time + things) / 2;
+};
+
+/* --- Step 3: repetition and novelty --- */
+
+const repetitionPenalty = (a, recent) =>
+    recent.reduce((sum, r) => {
+        const fade = 1 - r.daysAgo / (HISTORY_DAYS + 1);
+        const penalty = r.activity === a ? SAME_ACTIVITY_PENALTY : SIMILAR_ACTIVITY_PENALTY * similarity(a, r.activity);
+        return sum + fade * penalty;
+    }, 0);
+
+const scoreActivity = (a, ctx) => {
+    const fits = {
+        age: ageFit(a, ctx.months),
+        skill: skillFit(a, ctx.child, ctx.prefs),
+        interest: interestFit(a, ctx.prefs),
+        feedback: feedbackFit(a, ctx.prefs),
+        diversity: diversity(a, ctx.areaCounts),
+        practical: practicalFit(a, ctx.child.conditions),
+    };
+    const weighted = Object.entries(RECOMMENDATION_WEIGHTS).reduce((sum, [key, w]) => sum + fits[key] * w, 0);
+    const novelty = ctx.shownIds.has(a.id) ? 0 : NOVELTY_BONUS;
+    const explore = a.interestTags.some((tag) => !(tag in ctx.prefs.interest)) ? EXPLORE_BONUS : 0;
+    return weighted - repetitionPenalty(a, ctx.recent) + novelty + explore;
+};
+
+// Eligible activities, best first. Replaced recommendations do not count as shown.
+const rankActivities = (child, date, excludeIds = new Set()) => {
+    const {months} = ageOf(child.birthDate, date);
+    const shown = data.recommendations.filter((r) => r.childId === child.id && r.status !== "replaced");
+    const recent = shown
+        .map((r) => ({activity: findActivity(r.activityId), daysAgo: daysBetween(r.date, date)}))
+        .filter((r) => r.activity && r.daysAgo >= 0 && r.daysAgo <= HISTORY_DAYS);
+    const areaCounts = {};
+    recent.forEach((r) => r.activity.areas.forEach((area) => (areaCounts[area] = (areaCounts[area] ?? 0) + 1)));
+    const ctx = {
+        child,
+        months,
+        recent,
+        areaCounts,
+        prefs: preferencesOf(child.id),
+        shownIds: new Set(shown.map((r) => r.activityId)),
+    };
+    return catalogue
+        .filter((a) => isEligible(a, child, months) && !excludeIds.has(a.id))
+        .map((activity) => ({activity, score: scoreActivity(activity, ctx)}))
+        .sort((x, y) => y.score - x.score);
+};
+
+const pickActivity = (child, date, excludeIds) => rankActivities(child, date, excludeIds)[0]?.activity;
+
+/* --- Daily recommendation --- */
+
+const recommendationsOn = (childId, date) =>
+    data.recommendations.filter((r) => r.childId === childId && r.date === date);
+
+const setStatus = (rec, status) => Object.assign(rec, {status, updatedAt: now()});
+
+const addRecommendation = (childId, date, activity) => {
+    const time = now();
+    const rec = {id: uid(), childId, date, activityId: activity.id, status: "recommended", createdAt: time, updatedAt: time};
+    data.recommendations.push(rec);
+    return rec;
+};
+
+// One recommendation per child and day: created once, then kept until the parent asks for another
+const todayRecommendation = (child) => {
+    const date = dateKey();
+    const todays = recommendationsOn(child.id, date);
+    const current = todays.findLast((r) => r.status !== "replaced");
+    if (current && isAvailable(findActivity(current.activityId))) return current;
+    // the activity has left the catalogue or lost its safety review
+    if (current && !FINISHED.includes(current.status)) setStatus(current, "replaced");
+    const activity = pickActivity(child, date, new Set(todays.map((r) => r.activityId)));
+    const rec = activity ? addRecommendation(child.id, date, activity) : null;
+    if (current || rec) saveData();
+    return rec;
+};
+
+// The replaced recommendation stays in history and is not a negative evaluation.
+// Activities already shown today come back only when nothing else is left.
+const replaceRecommendation = (child, current) => {
+    const shownToday = new Set(recommendationsOn(child.id, current.date).map((r) => r.activityId));
+    const activity =
+        pickActivity(child, current.date, shownToday) ?? pickActivity(child, current.date, new Set([current.activityId]));
+    if (!activity) return false;
+    updateData(() => {
+        if (!FINISHED.includes(current.status)) setStatus(current, "replaced");
+        addRecommendation(child.id, current.date, activity);
+    });
+    return true;
+};
+
+// ==========================================================================
+// 10. UI COMPONENTS
 // ==========================================================================
 
 // Chips for single or multiple choice
@@ -585,7 +816,7 @@ document.querySelectorAll("dialog .close").forEach((button) => {
 });
 
 // ==========================================================================
-// 10. HEADER
+// 11. HEADER
 // ==========================================================================
 
 const renderHeader = () => {
@@ -604,16 +835,47 @@ childSelect.onchange = () => {
 };
 
 // ==========================================================================
-// 11. TODAY
+// 12. TODAY
 // ==========================================================================
+
+let todayRec = null;
 
 const renderToday = () => {
     todayDate.textContent = formatDate(dateKey(), {weekday: "long", day: "numeric", month: "long"});
-    welcome.classList.toggle("hidden", !!activeChild());
+    const child = activeChild();
+    // without the catalogue the stored recommendation cannot be checked, so it is left untouched
+    todayRec = child && !catalogueError ? todayRecommendation(child) : null;
+    welcome.classList.toggle("hidden", !!child);
+    todayEmpty.classList.toggle("hidden", !child || !!todayRec);
+    todayActivity.classList.toggle("hidden", !todayRec);
+    todayEmptyText.textContent = catalogueError ? S.catalogueError : S.noActivityText;
+    if (!todayRec) return;
+
+    const {status} = todayRec;
+    todayBody.replaceChildren(...activityContent(findActivity(todayRec.activityId), false));
+    todayStatus.textContent = S.statuses[status];
+    todayStatus.classList.toggle("hidden", status === "recommended");
+    todayMain.textContent = S.start;
+    todayMain.classList.toggle("hidden", status !== "recommended");
 };
 
+todayMain.onclick = () => {
+    updateData(() => setStatus(todayRec, "in_progress"));
+    renderToday();
+};
+
+todayAnother.onclick = () => {
+    if (!replaceRecommendation(activeChild(), todayRec)) showMessage(S.noAlternative);
+    renderToday();
+    window.scrollTo(0, 0);
+};
+
+todayDetails.onclick = () => openActivity(findActivity(todayRec.activityId));
+
+$("open-catalogue").onclick = () => showPage("activities");
+
 // ==========================================================================
-// 12. ACTIVITY DETAILS
+// 13. ACTIVITY DETAILS
 // ==========================================================================
 
 const block = (title, ...content) => el("section", {className: "block"}, el("h3", {textContent: title}), ...content);
@@ -643,19 +905,23 @@ const externalLinks = (links) =>
             ),
     );
 
-const activityContent = (a) => [
-    el("p", {
-        className: "help small",
-        textContent: [
-            ageRangeText(a),
-            S.difficulty[a.difficulty],
-            S.environment[a.environment],
-            S.intensity[a.intensity],
-            ...a.areas.map((area) => S.areas[area]),
-        ].join(" · "),
-    }),
-    !isAvailable(a) && el("p", {className: "warning", textContent: a.enabled ? S.notReviewedNote : S.disabledNote}),
-    el("h2", {textContent: a.title}),
+// Full details for the dialog, a compact version for the Today screen
+const activityContent = (a, full) => [
+    full &&
+        el("p", {
+            className: "help small",
+            textContent: [
+                ageRangeText(a),
+                S.difficulty[a.difficulty],
+                S.environment[a.environment],
+                S.intensity[a.intensity],
+                ...a.areas.map((area) => S.areas[area]),
+            ].join(" · "),
+        }),
+    full &&
+        !isAvailable(a) &&
+        el("p", {className: "warning", textContent: a.enabled ? S.notReviewedNote : S.disabledNote}),
+    el(full ? "h2" : "h1", {textContent: a.title}),
     el("p", {className: "lead", textContent: a.description}),
     el(
         "dl",
@@ -665,7 +931,8 @@ const activityContent = (a) => [
         ...fact(S.materialsTitle, a.materials.map((m) => S.materials[m]).join(", ") || S.noMaterials),
     ),
     block(S.instructions, listOf("ol", a.instructions)),
-    a.variations &&
+    full &&
+        a.variations &&
         block(
             S.variations,
             el(
@@ -676,17 +943,17 @@ const activityContent = (a) => [
         ),
     block(S.safety, listOf("ul", a.safety)),
     a.videos.length > 0 && block(S.videos, externalLinks(a.videos)),
-    a.sources.length > 0 && block(S.sources, externalLinks(a.sources)),
-];
+    full && a.sources.length > 0 && block(S.sources, externalLinks(a.sources)),
+].filter(Boolean);
 
 const openActivity = (activity) => {
-    activityBody.replaceChildren(...activityContent(activity));
+    activityBody.replaceChildren(...activityContent(activity, true));
     activityDialog.showModal();
     activityBody.scrollTop = 0;
 };
 
 // ==========================================================================
-// 13. ACTIVITIES
+// 14. ACTIVITIES
 // ==========================================================================
 
 const option = (value, textContent) => el("option", {value, textContent});
@@ -758,7 +1025,7 @@ const renderActivities = () => {
 });
 
 // ==========================================================================
-// 14. CHILD
+// 15. CHILD
 // ==========================================================================
 
 const renderSkills = (child) =>
@@ -895,7 +1162,7 @@ document.querySelectorAll(".add-child").forEach((button) => {
 });
 
 // ==========================================================================
-// 15. NAVIGATION
+// 16. NAVIGATION
 // ==========================================================================
 
 const renderers = {
@@ -930,7 +1197,7 @@ nav.onclick = (e) => {
 };
 
 // ==========================================================================
-// 16. INIT
+// 17. INIT
 // ==========================================================================
 
 (async () => {

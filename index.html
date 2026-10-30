@@ -34,6 +34,24 @@
         <p class="help small" data-i18n="localDataNote"></p>
         <button class="primary add-child" data-i18n="addChild"></button>
     </div>
+
+    <div id="today-empty" class="col gap-15 hidden">
+        <h2 data-i18n="noActivityTitle"></h2>
+        <p id="today-empty-text"></p>
+        <button id="open-catalogue" class="secondary" data-i18n="browseCatalogue"></button>
+    </div>
+
+    <div id="today-activity" class="col gap-10 hidden">
+        <article id="today-body" class="activity"></article>
+        <button id="today-details" class="link" data-i18n="moreDetails"></button>
+        <div class="actions">
+            <p id="today-status" class="status"></p>
+            <div class="row gap-10">
+                <button id="today-main" class="primary grow"></button>
+                <button id="today-another" class="secondary" data-i18n="another"></button>
+            </div>
+        </div>
+    </div>
 </section>
 
 <!-- ==========================================================================
