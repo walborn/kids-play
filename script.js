@@ -126,6 +126,8 @@ const DIFFICULTY_SIGN = {too_easy: 1, too_hard: -1};
 const INFERRED_HINT = 25; // inferred interest scores from this value are shown in the profile
 
 const DATA_LISTS = ["children", "recommendations", "feedback", "preferences"];
+const PREFERENCE_KINDS = ["interest", "activity", "difficulty"];
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 // ==========================================================================
 // 2. TRANSLATIONS
@@ -169,7 +171,7 @@ const STRINGS = {
         noAlternative: "Других подходящих занятий на сегодня нет.",
         statuses: {
             recommended: "Рекомендовано",
-            in_progress: "Идёт занятие",
+            in_progress: "Начато",
             completed: "Выполнено",
             partially_completed: "Выполнено частично",
             not_completed: "Не получилось",
@@ -355,10 +357,10 @@ const STRINGS = {
             imitation: "Подражает действиям и звукам",
         },
         levels: {
-            unknown: "Пока не замечали",
-            emerging: "Только появляется",
-            developing: "Иногда получается",
-            confident: "Получается уверенно",
+            unknown: "Не замечали",
+            emerging: "Появляется",
+            developing: "Иногда",
+            confident: "Уверенно",
         },
         interests: {
             music: "Музыка",
@@ -622,13 +624,14 @@ const exportData = () => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
+// Checks the fields the app relies on, so a broken file cannot replace working data
 const isValidImport = (d) =>
     Number.isInteger(d?.version) &&
     d.version <= DATA_VERSION &&
     DATA_LISTS.every((key) => Array.isArray(d[key])) &&
-    d.children.every(
-        (c) => c.id && c.name && /^\d{4}-\d{2}-\d{2}$/.test(c.birthDate) && Array.isArray(c.skills) && c.conditions,
-    );
+    d.children.every((c) => c.id && c.name && DATE_PATTERN.test(c.birthDate) && Array.isArray(c.skills) && c.conditions) &&
+    d.recommendations.every((r) => r.childId && r.activityId && DATE_PATTERN.test(r.date) && typeof r.createdAt === "string") &&
+    d.preferences.every((p) => PREFERENCE_KINDS.includes(p.kind));
 
 const importData = (imported) => {
     data = {...emptyData(), ...imported};
@@ -764,7 +767,7 @@ const preferenceScore = (p) => (p.manual ? MANUAL_SCORE[p.manual] : p.score);
 
 // Preference scores of a child grouped by kind: {interest: {music: 25}, activity: {...}, difficulty: {...}}
 const preferencesOf = (childId) => {
-    const prefs = {interest: {}, activity: {}, difficulty: {}};
+    const prefs = Object.fromEntries(PREFERENCE_KINDS.map((kind) => [kind, {}]));
     data.preferences
         .filter((p) => p.childId === childId)
         .forEach((p) => (prefs[p.kind][p.id] = preferenceScore(p)));

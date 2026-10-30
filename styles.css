@@ -444,6 +444,14 @@ dialog::backdrop {
     background: linear-gradient(transparent, var(--bg) 16px);
 }
 
+.actions .row {
+    flex-wrap: wrap;
+}
+
+.actions button {
+    flex: 1 1 auto;
+}
+
 .status {
     align-self: flex-start;
     padding: 4px 12px;
@@ -600,11 +608,12 @@ dialog::backdrop {
 /* Навыки */
 .skill {
     display: grid;
-    grid-template-columns: 1fr minmax(150px, 45%);
+    grid-template-columns: minmax(0, 1fr) 140px;
     align-items: center;
     gap: 10px;
     padding: 8px 0;
     font-size: 15px;
+    hyphens: auto;
 }
 
 .skill .input {
