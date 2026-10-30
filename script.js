@@ -113,6 +113,18 @@ const DIFFICULTY_LEVEL = {easy: 0, medium: 1, challenging: 2};
 
 const FINISHED = ["completed", "partially_completed", "not_completed"];
 
+const FEEDBACK_STATUSES = ["completed", "partially_completed", "not_completed", "skipped"];
+const FEEDBACK_INTERESTS = ["liked", "neutral", "disliked", "not_observed"];
+const FEEDBACK_DIFFICULTIES = ["too_easy", "appropriate", "too_hard", "not_observed"];
+const REASONS = ["no_time", "no_materials", "child_not_in_mood", "not_suitable", "other"];
+const NEEDS_REASON = ["not_completed", "skipped"];
+
+const PREFERENCE_STEP = 25; // one liked or disliked response; repeated responses add up
+const DIFFICULTY_STEP = 50; // one "too easy" or "too hard" response
+const INTEREST_SIGN = {liked: 1, disliked: -1};
+const DIFFICULTY_SIGN = {too_easy: 1, too_hard: -1};
+const INFERRED_HINT = 25; // inferred interest scores from this value are shown in the profile
+
 // ==========================================================================
 // 2. TRANSLATIONS
 // ==========================================================================
@@ -149,7 +161,9 @@ const STRINGS = {
         browseCatalogue: "Открыть каталог",
         moreDetails: "Подробнее о занятии",
         start: "Начать",
+        finish: "Завершить",
         another: "Другое занятие",
+        oneMore: "Ещё одно занятие",
         noAlternative: "Других подходящих занятий на сегодня нет.",
         statuses: {
             recommended: "Рекомендовано",
@@ -158,6 +172,41 @@ const STRINGS = {
             partially_completed: "Выполнено частично",
             not_completed: "Не получилось",
             replaced: "Заменено",
+            skipped: "Пропущено",
+        },
+
+        /* --- Feedback --- */
+        feedbackTitle: "Как прошло занятие?",
+        feedbackStatus: "Результат",
+        feedbackInterest: "Интерес ребёнка",
+        feedbackDifficulty: "Сложность",
+        feedbackReason: "Что помешало",
+        comment: "Комментарий",
+        commentPlaceholder: "Необязательно",
+        feedbackStatuses: {
+            completed: "Получилось",
+            partially_completed: "Частично",
+            not_completed: "Не получилось",
+            skipped: "Пропустили",
+        },
+        interestFeedback: {
+            liked: "Понравилось",
+            neutral: "Нейтрально",
+            disliked: "Не понравилось",
+            not_observed: "Не заметно",
+        },
+        difficultyFeedback: {
+            too_easy: "Слишком легко",
+            appropriate: "В самый раз",
+            too_hard: "Сложновато",
+            not_observed: "Не заметно",
+        },
+        reasons: {
+            no_time: "Не было времени",
+            no_materials: "Нет материалов",
+            child_not_in_mood: "Не было настроения",
+            not_suitable: "Не подходит",
+            other: "Другое",
         },
         welcomeTitle: "Здравствуйте!",
         welcomeText: "Добавьте профиль ребёнка, и приложение будет каждый день предлагать одно подходящее занятие.",
@@ -184,8 +233,15 @@ const STRINGS = {
             "или стандартизированная оценка развития. Каждый ребёнок развивается в своём темпе.",
         observed: (n) => (n ? `отмечено: ${n}` : ""),
         interestsTitle: "Интересы",
-        interestsNote: "Нажмите, чтобы отметить: нравится → не нравится → не указано.",
-        interestStates: {like: "нравится", dislike: "не нравится"},
+        interestsNote:
+            "Нажмите, чтобы отметить: нравится → не нравится → не указано. " +
+            "Стрелки ↑ и ↓ показывают выводы из отзывов, ваша отметка всегда важнее.",
+        interestStates: {
+            like: "нравится",
+            dislike: "не нравится",
+            inferredLike: "по отзывам нравится",
+            inferredDislike: "по отзывам не нравится",
+        },
         conditionsTitle: "Условия для занятий",
         conditionsNote: "Необязательно. Помогает подбирать занятия, которые удобно провести.",
         durationLabel: "Сколько есть времени",
@@ -323,6 +379,8 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 
 const now = () => new Date().toISOString();
 
+const clamp = (x, min, max) => Math.min(max, Math.max(min, x));
+
 const average = (values) => values.reduce((sum, x) => sum + x, 0) / values.length;
 
 const toggle = (list, item) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
@@ -417,6 +475,17 @@ const conditionDuration = $("condition-duration");
 const conditionEnvironment = $("condition-environment");
 const conditionIntensity = $("condition-intensity");
 const conditionMaterials = $("condition-materials");
+
+/* --- Feedback --- */
+const feedbackDialog = $("feedback-dialog");
+const feedbackForm = $("feedback-form");
+const fbStatus = $("fb-status");
+const fbObserved = $("fb-observed");
+const fbInterest = $("fb-interest");
+const fbDifficulty = $("fb-difficulty");
+const fbReasonField = $("fb-reason-field");
+const fbReason = $("fb-reason");
+const fbComment = $("fb-comment");
 
 /* --- Activities --- */
 const searchInput = $("search");
@@ -777,7 +846,48 @@ const replaceRecommendation = (child, current) => {
 };
 
 // ==========================================================================
-// 10. UI COMPONENTS
+// 10. FEEDBACK
+// ==========================================================================
+
+const feedbackFor = (recId) => data.feedback.findLast((f) => f.recommendationId === recId);
+
+const adjustPreference = (childId, kind, id, delta) => {
+    const p = getPreference(childId, kind, id);
+    p.score = clamp(p.score + delta, -100, 100);
+    p.updatedAt = now();
+};
+
+// Only explicit observations change preferences: lack of time, materials or mood says nothing about interest.
+// Responses add up, so repeated ones weigh more than a single one, and nothing is ever excluded for good.
+const applyFeedback = ({childId, interest, difficulty, reason}, activity) => {
+    const sign = INTEREST_SIGN[interest];
+    if (sign) {
+        activity.interestTags.forEach((tag) => adjustPreference(childId, "interest", tag, sign * PREFERENCE_STEP));
+        adjustPreference(childId, "activity", activity.id, sign * PREFERENCE_STEP);
+    }
+    if (reason === "not_suitable") adjustPreference(childId, "activity", activity.id, -PREFERENCE_STEP);
+    const shift = DIFFICULTY_SIGN[difficulty];
+    if (shift) activity.areas.forEach((area) => adjustPreference(childId, "difficulty", area, shift * DIFFICULTY_STEP));
+};
+
+const saveFeedback = (rec, fields) =>
+    updateData((d) => {
+        const feedback = {
+            id: uid(),
+            childId: rec.childId,
+            activityId: rec.activityId,
+            recommendationId: rec.id,
+            date: rec.date,
+            ...fields,
+            createdAt: now(),
+        };
+        d.feedback.push(feedback);
+        setStatus(rec, fields.status === "skipped" ? "not_completed" : fields.status);
+        applyFeedback(feedback, findActivity(rec.activityId));
+    });
+
+// ==========================================================================
+// 11. UI COMPONENTS
 // ==========================================================================
 
 // Chips for single or multiple choice
@@ -816,7 +926,7 @@ document.querySelectorAll("dialog .close").forEach((button) => {
 });
 
 // ==========================================================================
-// 11. HEADER
+// 12. HEADER
 // ==========================================================================
 
 const renderHeader = () => {
@@ -835,10 +945,23 @@ childSelect.onchange = () => {
 };
 
 // ==========================================================================
-// 12. TODAY
+// 13. TODAY
 // ==========================================================================
 
 let todayRec = null;
+
+// Status and the observations from feedback, if any: "Выполнено · Понравилось · В самый раз"
+const resultText = (rec) => {
+    const fb = feedbackFor(rec.id);
+    return [
+        S.statuses[fb?.status ?? rec.status],
+        fb && fb.interest !== "not_observed" && S.interestFeedback[fb.interest],
+        fb && fb.difficulty !== "not_observed" && S.difficultyFeedback[fb.difficulty],
+        fb?.reason && S.reasons[fb.reason],
+    ]
+        .filter(Boolean)
+        .join(" · ");
+};
 
 const renderToday = () => {
     todayDate.textContent = formatDate(dateKey(), {weekday: "long", day: "numeric", month: "long"});
@@ -852,14 +975,17 @@ const renderToday = () => {
     if (!todayRec) return;
 
     const {status} = todayRec;
+    const finished = FINISHED.includes(status);
     todayBody.replaceChildren(...activityContent(findActivity(todayRec.activityId), false));
-    todayStatus.textContent = S.statuses[status];
+    todayStatus.textContent = resultText(todayRec);
     todayStatus.classList.toggle("hidden", status === "recommended");
-    todayMain.textContent = S.start;
-    todayMain.classList.toggle("hidden", status !== "recommended");
+    todayMain.textContent = status === "in_progress" ? S.finish : S.start;
+    todayMain.classList.toggle("hidden", finished);
+    todayAnother.textContent = finished ? S.oneMore : S.another;
 };
 
 todayMain.onclick = () => {
+    if (todayRec.status === "in_progress") return openFeedback();
     updateData(() => setStatus(todayRec, "in_progress"));
     renderToday();
 };
@@ -874,8 +1000,44 @@ todayDetails.onclick = () => openActivity(findActivity(todayRec.activityId));
 
 $("open-catalogue").onclick = () => showPage("activities");
 
+/* --- Feedback form --- */
+
+let draft = null;
+
+const renderFeedbackForm = () => {
+    const pick = (key) => (value) => {
+        draft[key] = value;
+        renderFeedbackForm();
+    };
+    renderChoices(fbStatus, FEEDBACK_STATUSES, S.feedbackStatuses, (v) => v === draft.status, pick("status"));
+    renderChoices(fbInterest, FEEDBACK_INTERESTS, S.interestFeedback, (v) => v === draft.interest, pick("interest"));
+    renderChoices(fbDifficulty, FEEDBACK_DIFFICULTIES, S.difficultyFeedback, (v) => v === draft.difficulty, pick("difficulty"));
+    renderChoices(fbReason, REASONS, S.reasons, (v) => v === draft.reason, pick("reason"));
+    fbObserved.classList.toggle("hidden", draft.status === "skipped");
+    fbReasonField.classList.toggle("hidden", !NEEDS_REASON.includes(draft.status));
+};
+
+const openFeedback = () => {
+    draft = {status: "completed", interest: "not_observed", difficulty: "not_observed", reason: null};
+    fbComment.value = "";
+    renderFeedbackForm();
+    feedbackDialog.showModal();
+};
+
+feedbackForm.onsubmit = () => {
+    const skipped = draft.status === "skipped";
+    saveFeedback(todayRec, {
+        status: draft.status,
+        interest: skipped ? "not_observed" : draft.interest,
+        difficulty: skipped ? "not_observed" : draft.difficulty,
+        reason: NEEDS_REASON.includes(draft.status) ? draft.reason : null,
+        comment: fbComment.value.trim() || null,
+    });
+    renderToday();
+};
+
 // ==========================================================================
-// 13. ACTIVITY DETAILS
+// 14. ACTIVITY DETAILS
 // ==========================================================================
 
 const block = (title, ...content) => el("section", {className: "block"}, el("h3", {textContent: title}), ...content);
@@ -953,7 +1115,7 @@ const openActivity = (activity) => {
 };
 
 // ==========================================================================
-// 14. ACTIVITIES
+// 15. ACTIVITIES
 // ==========================================================================
 
 const option = (value, textContent) => el("option", {value, textContent});
@@ -1025,7 +1187,7 @@ const renderActivities = () => {
 });
 
 // ==========================================================================
-// 15. CHILD
+// 16. CHILD
 // ==========================================================================
 
 const renderSkills = (child) =>
@@ -1069,15 +1231,19 @@ const renderSkills = (child) =>
         }),
     );
 
+// Manual mark, or a noticeable score inferred from feedback
+const interestState = (p) =>
+    p?.manual ?? (p?.score >= INFERRED_HINT ? "inferredLike" : p?.score <= -INFERRED_HINT ? "inferredDislike" : null);
+
 const renderInterests = (child) =>
     interestsList.replaceChildren(
         ...INTERESTS.map((tag) => {
-            const manual = findPreference(child.id, "interest", tag)?.manual;
+            const state = interestState(findPreference(child.id, "interest", tag));
             return el("button", {
                 type: "button",
-                className: `tap ${{like: "selected", dislike: "excluded"}[manual] ?? ""}`,
-                ariaLabel: manual ? `${S.interests[tag]}: ${S.interestStates[manual]}` : S.interests[tag],
-                textContent: S.interests[tag],
+                className: `tap ${{like: "selected", dislike: "excluded"}[state] ?? ""}`,
+                ariaLabel: state ? `${S.interests[tag]}: ${S.interestStates[state]}` : S.interests[tag],
+                textContent: S.interests[tag] + ({inferredLike: " ↑", inferredDislike: " ↓"}[state] ?? ""),
                 onclick: () => {
                     toggleInterest(child, tag);
                     renderInterests(child);
@@ -1162,7 +1328,7 @@ document.querySelectorAll(".add-child").forEach((button) => {
 });
 
 // ==========================================================================
-// 16. NAVIGATION
+// 17. NAVIGATION
 // ==========================================================================
 
 const renderers = {
@@ -1197,7 +1363,7 @@ nav.onclick = (e) => {
 };
 
 // ==========================================================================
-// 17. INIT
+// 18. INIT
 // ==========================================================================
 
 (async () => {

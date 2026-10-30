@@ -275,6 +275,10 @@ h3 {
     border-color: var(--accent);
 }
 
+textarea.input {
+    resize: vertical;
+}
+
 select.input,
 #child-select {
     appearance: none;

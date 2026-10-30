@@ -205,6 +205,43 @@
     <article id="activity-body" class="activity sheet-scroll"></article>
 </dialog>
 
+<dialog id="feedback-dialog" class="sheet">
+    <form id="feedback-form" method="dialog" class="col gap-20">
+        <div class="row between">
+            <h2 data-i18n="feedbackTitle"></h2>
+            <button type="button" class="icon-button close" data-i18n-label="close">
+                <svg aria-hidden="true">
+                    <use href="icons/sprite.svg#close"></use>
+                </svg>
+            </button>
+        </div>
+        <div class="field">
+            <span class="label" data-i18n="feedbackStatus"></span>
+            <div id="fb-status" class="chips"></div>
+        </div>
+        <div id="fb-observed" class="col gap-20">
+            <div class="field">
+                <span class="label" data-i18n="feedbackInterest"></span>
+                <div id="fb-interest" class="chips"></div>
+            </div>
+            <div class="field">
+                <span class="label" data-i18n="feedbackDifficulty"></span>
+                <div id="fb-difficulty" class="chips"></div>
+            </div>
+        </div>
+        <div id="fb-reason-field" class="field">
+            <span class="label" data-i18n="feedbackReason"></span>
+            <div id="fb-reason" class="chips"></div>
+        </div>
+        <label class="field">
+            <span class="label" data-i18n="comment"></span>
+            <textarea id="fb-comment" class="input" rows="2" maxlength="300"
+                      data-i18n-placeholder="commentPlaceholder"></textarea>
+        </label>
+        <button class="primary" data-i18n="save"></button>
+    </form>
+</dialog>
+
 <dialog id="child-dialog" class="sheet">
     <form id="child-form" method="dialog" class="col gap-20">
         <div class="row between">
