@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+    <meta name="theme-color" content="#f7f6f4" media="(prefers-color-scheme: light)"/>
+    <meta name="theme-color" content="#2a2a2a" media="(prefers-color-scheme: dark)"/>
+
+    <title>Занятия с ребёнком</title>
+
+    <link rel="manifest" href="manifest.json"/>
+    <link rel="stylesheet" href="styles.css"/>
+
+    <link rel="icon" type="image/svg+xml" href="icons/favicon.svg"/>
+    <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+</head>
+<body>
+
+<!-- ==========================================================================
+     СЕГОДНЯ
+     ========================================================================== -->
+
+<section id="today-page" class="page">
+    <p id="today-date" class="help"></p>
+</section>
+
+<!-- ==========================================================================
+     ЗАНЯТИЯ
+     ========================================================================== -->
+
+<section id="activities-page" class="page hidden">
+    <h1 data-i18n="activities"></h1>
+</section>
+
+<!-- ==========================================================================
+     ИСТОРИЯ
+     ========================================================================== -->
+
+<section id="history-page" class="page hidden">
+    <h1 data-i18n="history"></h1>
+</section>
+
+<!-- ==========================================================================
+     РЕБЁНОК
+     ========================================================================== -->
+
+<section id="child-page" class="page hidden">
+    <h1 data-i18n="child"></h1>
+</section>
+
+<!-- ==========================================================================
+     НАСТРОЙКИ
+     ========================================================================== -->
+
+<section id="settings-page" class="page hidden">
+    <h1 data-i18n="settings"></h1>
+</section>
+
+<!-- ==========================================================================
+     НАВИГАЦИЯ
+     ========================================================================== -->
+
+<nav id="nav" data-i18n-label="navigation">
+    <button data-page="today" class="active" aria-current="page">
+        <svg aria-hidden="true">
+            <use href="icons/sprite.svg#today"></use>
+        </svg>
+        <span data-i18n="today"></span>
+    </button>
+    <button data-page="activities">
+        <svg aria-hidden="true">
+            <use href="icons/sprite.svg#activities"></use>
+        </svg>
+        <span data-i18n="activities"></span>
+    </button>
+    <button data-page="history">
+        <svg aria-hidden="true">
+            <use href="icons/sprite.svg#history"></use>
+        </svg>
+        <span data-i18n="history"></span>
+    </button>
+    <button data-page="child">
+        <svg aria-hidden="true">
+            <use href="icons/sprite.svg#child"></use>
+        </svg>
+        <span data-i18n="child"></span>
+    </button>
+    <button data-page="settings">
+        <svg aria-hidden="true">
+            <use href="icons/sprite.svg#settings"></use>
+        </svg>
+        <span data-i18n="settings"></span>
+    </button>
+</nav>
+
+<script src="script.js"></script>
+
+</body>
+</html>

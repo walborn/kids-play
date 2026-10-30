@@ -1,0 +1,181 @@
+/* ==========================================================================
+   1. ПЕРЕМЕННЫЕ
+   ========================================================================== */
+
+:root {
+    --bg: #f7f6f4;
+    --text: #4d5156;
+    --head: white;
+    --icon: #5f646e;
+    --line: #e7e7e7;
+    --fade: #f2f1ef;
+    --help: #8b8b8b;
+
+    --yellow: #c9a84c;
+    --blue: #7a82da;
+    --green: #4aaf8c;
+    --red: #d0675a;
+
+    --accent: var(--blue);
+    --radius: 12px;
+    --nav-height: calc(64px + env(safe-area-inset-bottom));
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #2a2a2a;
+        --text: #c8c8c8;
+        --head: #303030;
+        --icon: #bcb6a6;
+        --line: #444444;
+        --fade: #2d2d2d;
+        --help: #838282;
+
+        --accent: var(--yellow);
+
+        --yellow: #a88a36;
+        --green: #3d9a78;
+    }
+}
+
+/* ==========================================================================
+   2. СБРОС И БАЗА
+   ========================================================================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    color-scheme: light dark;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.5;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+button {
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+button:disabled {
+    cursor: default;
+    opacity: 0.4;
+}
+
+a {
+    color: var(--accent);
+}
+
+svg {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: var(--icon);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+h1 {
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+h2 {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--help);
+}
+
+/* ==========================================================================
+   3. УТИЛИТЫ
+   ========================================================================== */
+
+.hidden {
+    display: none !important;
+}
+
+.help {
+    color: var(--help);
+}
+
+.small {
+    font-size: 14px;
+}
+
+/* ==========================================================================
+   4. СТРАНИЦЫ
+   ========================================================================== */
+
+.page {
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: max(20px, env(safe-area-inset-top)) 20px calc(var(--nav-height) + 24px);
+}
+
+/* ==========================================================================
+   5. НИЖНЯЯ НАВИГАЦИЯ
+   ========================================================================== */
+
+nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    height: var(--nav-height);
+    padding: 6px max(8px, calc((100% - 600px) / 2)) env(safe-area-inset-bottom);
+    background: var(--head);
+    border-top: 1px solid var(--line);
+    border-radius: 20px 20px 0 0;
+}
+
+nav button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 11px;
+    color: var(--help);
+}
+
+nav .active {
+    color: var(--accent);
+}
+
+nav .active svg {
+    stroke: var(--accent);
+}
