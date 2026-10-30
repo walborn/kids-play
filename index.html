@@ -41,7 +41,20 @@
      ========================================================================== -->
 
 <section id="activities-page" class="page hidden">
-    <h1 data-i18n="activities"></h1>
+    <div class="col gap-10">
+        <h1 data-i18n="activities"></h1>
+        <input id="search" class="input" type="search" autocomplete="off" enterkeyhint="search"
+               data-i18n-placeholder="searchPlaceholder" data-i18n-label="searchPlaceholder">
+        <div class="filters">
+            <select id="filter-area" class="input" data-i18n-label="filterArea"></select>
+            <select id="filter-age" class="input" data-i18n-label="filterAge"></select>
+            <select id="filter-duration" class="input" data-i18n-label="filterDuration"></select>
+            <select id="filter-interest" class="input" data-i18n-label="filterInterest"></select>
+        </div>
+        <p id="catalogue-status" class="help small"></p>
+    </div>
+    <ul id="activity-list" class="list"></ul>
+    <p id="activity-empty" class="help hidden" data-i18n="nothingFound"></p>
 </section>
 
 <!-- ==========================================================================
@@ -162,6 +175,17 @@
 <!-- ==========================================================================
      ДИАЛОГИ
      ========================================================================== -->
+
+<dialog id="activity-dialog" class="sheet full">
+    <div class="sheet-bar">
+        <button type="button" class="icon-button close" data-i18n-label="close">
+            <svg aria-hidden="true">
+                <use href="icons/sprite.svg#close"></use>
+            </svg>
+        </button>
+    </div>
+    <article id="activity-body" class="activity sheet-scroll"></article>
+</dialog>
 
 <dialog id="child-dialog" class="sheet">
     <form id="child-form" method="dialog" class="col gap-20">

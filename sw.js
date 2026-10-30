@@ -8,6 +8,7 @@ const APP_SHELL = [
     "styles.css",
     "script.js",
     "manifest.json",
+    "data/activities.json",
     "icons/sprite.svg",
     "icons/favicon.svg",
     "icons/icon-192.png",

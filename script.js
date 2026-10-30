@@ -4,6 +4,7 @@
 
 const STORAGE_KEY = "childActivityPlanner";
 const DATA_VERSION = 1;
+const CATALOGUE_URL = "data/activities.json";
 const LANG = "ru";
 
 // Shared vocabulary: the same ids are used in the catalogue, the child profile, feedback and scoring
@@ -58,6 +59,30 @@ const GENDERS = ["unspecified", "female", "male"];
 const DURATION_LIMITS = [0, 5, 10, 15]; // minutes, 0 means no limit
 const ENVIRONMENT_PREFS = ["either", "home", "outdoors"];
 const INTENSITY_PREFS = ["either", "calm", "active"];
+const AGE_RANGES = [[0, 3], [3, 6], [6, 9], [9, 12]]; // catalogue filter, months
+
+// Activities without these fields are left out of the catalogue
+const REQUIRED_FIELDS = [
+    "id",
+    "title",
+    "description",
+    "goal",
+    "ageMinMonths",
+    "ageMaxMonths",
+    "areas",
+    "skillTags",
+    "interestTags",
+    "difficulty",
+    "duration",
+    "materials",
+    "environment",
+    "intensity",
+    "instructions",
+    "safety",
+    "sources",
+    "videos",
+];
+const NON_EMPTY_FIELDS = ["areas", "instructions", "safety"];
 
 // Manual interest marks cycle: none → like → dislike → none
 const NEXT_MANUAL = {like: "dislike", dislike: null};
@@ -126,6 +151,44 @@ const STRINGS = {
         durationLimits: {0: "Неважно", 5: "До 5 мин", 10: "До 10 мин", 15: "До 15 мин"},
         environmentPrefs: {either: "Неважно", home: "Дома", outdoors: "На улице"},
         intensityPrefs: {either: "Любые", calm: "Спокойные", active: "Подвижные"},
+
+        /* --- Catalogue --- */
+        searchPlaceholder: "Поиск по названию",
+        allAreas: "Все области",
+        anyAge: "Любой возраст",
+        childAgeFilter: "По возрасту ребёнка",
+        anyDuration: "Любое время",
+        allInterests: "Все интересы",
+        filterArea: "Область развития",
+        filterAge: "Возраст",
+        filterDuration: "Длительность",
+        filterInterest: "Интерес",
+        nothingFound: "Ничего не нашлось. Попробуйте изменить поиск или фильтры.",
+        catalogueError:
+            "Не удалось загрузить каталог занятий. Подключитесь к интернету и откройте приложение снова.",
+        catalogueStatus: (reviewed, total) =>
+            `Проверено на безопасность: ${reviewed} из ${total}. ` +
+            "Непроверенные занятия видны в каталоге, но не попадают в рекомендации.",
+        ageRange: (min, max) => `${min}–${max} мес.`,
+        notReviewed: "Не проверено",
+        disabled: "Отключено",
+        notReviewedNote:
+            "Это демонстрационное занятие ещё не проверено на безопасность, поэтому приложение его не рекомендует.",
+        disabledNote: "Это занятие отключено и не попадает в рекомендации.",
+        goal: "Цель",
+        duration: "Время",
+        materialsTitle: "Материалы",
+        noMaterials: "Ничего не нужно",
+        instructions: "Как играть",
+        variations: "Варианты",
+        easier: "Проще",
+        harder: "Сложнее",
+        safety: "Безопасность",
+        videos: "Видео",
+        sources: "Источники",
+        difficulty: {easy: "Легко", medium: "Средне", challenging: "Посложнее"},
+        environment: {home: "Дома", outdoors: "На улице", either: "Дома или на улице"},
+        intensity: {calm: "Спокойное", active: "Подвижное"},
 
         /* --- Vocabulary --- */
         areas: {
@@ -263,11 +326,14 @@ const formatAge = (birthDate) => {
 };
 
 // Builds an element. Strings become text nodes, so catalogue and user text is never parsed as HTML.
+// False and null children are skipped to allow `condition && child`.
 const el = (tag, props, ...children) => {
     const node = Object.assign(document.createElement(tag), props);
-    node.append(...children);
+    node.append(...children.filter((child) => child != null && child !== false));
     return node;
 };
+
+const normalize = (text) => text.toLowerCase().replaceAll("ё", "е");
 
 // ==========================================================================
 // 4. DOM ELEMENTS
@@ -298,6 +364,20 @@ const conditionEnvironment = $("condition-environment");
 const conditionIntensity = $("condition-intensity");
 const conditionMaterials = $("condition-materials");
 
+/* --- Activities --- */
+const searchInput = $("search");
+const filterArea = $("filter-area");
+const filterAge = $("filter-age");
+const filterDuration = $("filter-duration");
+const filterInterest = $("filter-interest");
+const catalogueStatus = $("catalogue-status");
+const activityList = $("activity-list");
+const activityEmpty = $("activity-empty");
+
+/* --- Activity details --- */
+const activityDialog = $("activity-dialog");
+const activityBody = $("activity-body");
+
 /* --- Child form --- */
 const childDialog = $("child-dialog");
 const childForm = $("child-form");
@@ -325,6 +405,9 @@ const translatePage = () => {
     document
         .querySelectorAll("[data-i18n-label]")
         .forEach((node) => node.setAttribute("aria-label", S[node.dataset.i18nLabel]));
+    document
+        .querySelectorAll("[data-i18n-placeholder]")
+        .forEach((node) => (node.placeholder = S[node.dataset.i18nPlaceholder]));
 };
 
 // ==========================================================================
@@ -437,7 +520,33 @@ const toggleInterest = (child, tag) =>
     });
 
 // ==========================================================================
-// 8. UI COMPONENTS
+// 8. CATALOGUE
+// ==========================================================================
+
+let catalogue = [];
+let catalogueError = false;
+
+const isComplete = (activity) =>
+    REQUIRED_FIELDS.every((key) => activity[key] != null && activity[key] !== "") &&
+    NON_EMPTY_FIELDS.every((key) => activity[key].length > 0);
+
+const loadCatalogue = async () => {
+    try {
+        const list = await (await fetch(CATALOGUE_URL)).json();
+        catalogue = list.filter(isComplete);
+        list.filter((a) => !isComplete(a)).forEach((a) => console.warn("Incomplete activity skipped:", a.id));
+    } catch {
+        catalogueError = true;
+    }
+};
+
+const findActivity = (id) => catalogue.find((a) => a.id === id);
+
+// Only enabled activities that passed a safety review can be recommended
+const isAvailable = (activity) => activity?.enabled === true && activity.safetyReviewed === true;
+
+// ==========================================================================
+// 9. UI COMPONENTS
 // ==========================================================================
 
 // Chips for single or multiple choice
@@ -476,7 +585,7 @@ document.querySelectorAll("dialog .close").forEach((button) => {
 });
 
 // ==========================================================================
-// 9. HEADER
+// 10. HEADER
 // ==========================================================================
 
 const renderHeader = () => {
@@ -495,7 +604,7 @@ childSelect.onchange = () => {
 };
 
 // ==========================================================================
-// 10. TODAY
+// 11. TODAY
 // ==========================================================================
 
 const renderToday = () => {
@@ -504,7 +613,152 @@ const renderToday = () => {
 };
 
 // ==========================================================================
-// 11. CHILD
+// 12. ACTIVITY DETAILS
+// ==========================================================================
+
+const block = (title, ...content) => el("section", {className: "block"}, el("h3", {textContent: title}), ...content);
+
+const listOf = (tag, items) => el(tag, {}, ...items.map((text) => el("li", {textContent: text})));
+
+const fact = (term, text) => [el("dt", {textContent: term}), el("dd", {textContent: text})];
+
+const ageRangeText = (a) => S.ageRange(a.ageMinMonths, a.ageMaxMonths);
+
+const externalLinks = (links) =>
+    el(
+        "ul",
+        {className: "links"},
+        ...links
+            .filter(({url}) => /^https?:\/\//.test(url))
+            .map(({title, url, sourceName, language, duration}) =>
+                el(
+                    "li",
+                    {},
+                    el("a", {href: url, target: "_blank", rel: "noopener noreferrer", textContent: title}),
+                    el("span", {
+                        className: "help small",
+                        textContent: [sourceName, language, duration].filter(Boolean).join(" · "),
+                    }),
+                ),
+            ),
+    );
+
+const activityContent = (a) => [
+    el("p", {
+        className: "help small",
+        textContent: [
+            ageRangeText(a),
+            S.difficulty[a.difficulty],
+            S.environment[a.environment],
+            S.intensity[a.intensity],
+            ...a.areas.map((area) => S.areas[area]),
+        ].join(" · "),
+    }),
+    !isAvailable(a) && el("p", {className: "warning", textContent: a.enabled ? S.notReviewedNote : S.disabledNote}),
+    el("h2", {textContent: a.title}),
+    el("p", {className: "lead", textContent: a.description}),
+    el(
+        "dl",
+        {className: "facts"},
+        ...fact(S.goal, a.goal),
+        ...fact(S.duration, `${a.duration} ${S.units.minutes}`),
+        ...fact(S.materialsTitle, a.materials.map((m) => S.materials[m]).join(", ") || S.noMaterials),
+    ),
+    block(S.instructions, listOf("ol", a.instructions)),
+    a.variations &&
+        block(
+            S.variations,
+            el(
+                "dl",
+                {className: "facts"},
+                ...["easier", "harder"].filter((key) => a.variations[key]).flatMap((key) => fact(S[key], a.variations[key])),
+            ),
+        ),
+    block(S.safety, listOf("ul", a.safety)),
+    a.videos.length > 0 && block(S.videos, externalLinks(a.videos)),
+    a.sources.length > 0 && block(S.sources, externalLinks(a.sources)),
+];
+
+const openActivity = (activity) => {
+    activityBody.replaceChildren(...activityContent(activity));
+    activityDialog.showModal();
+    activityBody.scrollTop = 0;
+};
+
+// ==========================================================================
+// 13. ACTIVITIES
+// ==========================================================================
+
+const option = (value, textContent) => el("option", {value, textContent});
+
+const areaOptions = () => [option("", S.allAreas), ...AREAS.map((area) => option(area, S.areas[area]))];
+
+const fillFilters = () => {
+    filterArea.append(...areaOptions());
+    filterAge.append(
+        option("", S.anyAge),
+        option("child", S.childAgeFilter),
+        ...AGE_RANGES.map(([min, max]) => option(`${min}-${max}`, S.ageRange(min, max))),
+    );
+    filterDuration.append(...DURATION_LIMITS.map((d) => option(d, d ? S.durationLimits[d] : S.anyDuration)));
+    filterInterest.append(option("", S.allInterests), ...INTERESTS.map((tag) => option(tag, S.interests[tag])));
+};
+
+const ageFilterRange = (child) => {
+    if (filterAge.value !== "child") return filterAge.value && filterAge.value.split("-").map(Number);
+    const {months} = ageOf(child.birthDate);
+    return [months, months];
+};
+
+const activityItem = (a) =>
+    el(
+        "li",
+        {},
+        el(
+            "button",
+            {className: "item", onclick: () => openActivity(a)},
+            el(
+                "span",
+                {className: "item-title"},
+                a.title,
+                !isAvailable(a) && el("span", {className: "badge", textContent: a.enabled ? S.notReviewed : S.disabled}),
+            ),
+            el("span", {
+                className: "help small",
+                textContent: [ageRangeText(a), `${a.duration} ${S.units.minutes}`, ...a.areas.map((x) => S.areas[x])].join(" · "),
+            }),
+        ),
+    );
+
+const renderActivities = () => {
+    const child = activeChild();
+    filterAge.options[1].disabled = !child;
+    if (!child && filterAge.value === "child") filterAge.value = "";
+
+    const query = normalize(searchInput.value.trim());
+    const range = ageFilterRange(child);
+    const duration = Number(filterDuration.value);
+    const list = catalogue.filter(
+        (a) =>
+            normalize(a.title).includes(query) &&
+            (!filterArea.value || a.areas.includes(filterArea.value)) &&
+            (!range || (a.ageMinMonths <= range[1] && a.ageMaxMonths >= range[0])) &&
+            (!duration || a.duration <= duration) &&
+            (!filterInterest.value || a.interestTags.includes(filterInterest.value)),
+    );
+    activityList.replaceChildren(...list.map(activityItem));
+    activityEmpty.classList.toggle("hidden", list.length > 0 || catalogueError);
+    catalogueStatus.textContent = catalogueError
+        ? S.catalogueError
+        : S.catalogueStatus(catalogue.filter(isAvailable).length, catalogue.length);
+};
+
+[searchInput, filterArea, filterAge, filterDuration, filterInterest].forEach((input) => {
+    input.oninput = renderActivities;
+});
+
+// ==========================================================================
+// 14. CHILD
 // ==========================================================================
 
 const renderSkills = (child) =>
@@ -641,11 +895,12 @@ document.querySelectorAll(".add-child").forEach((button) => {
 });
 
 // ==========================================================================
-// 12. NAVIGATION
+// 15. NAVIGATION
 // ==========================================================================
 
 const renderers = {
     today: renderToday,
+    activities: renderActivities,
     child: renderChild,
 };
 
@@ -675,12 +930,14 @@ nav.onclick = (e) => {
 };
 
 // ==========================================================================
-// 13. INIT
+// 16. INIT
 // ==========================================================================
 
-(() => {
+(async () => {
     translatePage();
+    fillFilters();
     loadData();
+    await loadCatalogue();
     showPage("today");
     navigator.serviceWorker?.register("sw.js", {updateViaCache: "none"});
 
