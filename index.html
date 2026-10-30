@@ -16,12 +16,24 @@
 </head>
 <body>
 
+<header id="top" class="hidden">
+    <select id="child-select" data-i18n-label="selectChild"></select>
+    <span id="child-age" class="help"></span>
+</header>
+
 <!-- ==========================================================================
      СЕГОДНЯ
      ========================================================================== -->
 
 <section id="today-page" class="page">
     <p id="today-date" class="help"></p>
+
+    <div id="welcome" class="col gap-15 hidden">
+        <h1 data-i18n="welcomeTitle"></h1>
+        <p data-i18n="welcomeText"></p>
+        <p class="help small" data-i18n="localDataNote"></p>
+        <button class="primary add-child" data-i18n="addChild"></button>
+    </div>
 </section>
 
 <!-- ==========================================================================
@@ -45,7 +57,61 @@
      ========================================================================== -->
 
 <section id="child-page" class="page hidden">
-    <h1 data-i18n="child"></h1>
+    <div id="child-none" class="col gap-15">
+        <h1 data-i18n="child"></h1>
+        <p data-i18n="noChildText"></p>
+        <button class="primary add-child" data-i18n="addChild"></button>
+    </div>
+
+    <div id="child-profile" class="col gap-30">
+        <section class="col gap-5">
+            <div class="row between">
+                <h1 id="child-name"></h1>
+                <button id="child-edit" class="link" data-i18n="edit"></button>
+            </div>
+            <p id="child-info" class="help"></p>
+        </section>
+
+        <section class="col gap-10">
+            <h2 data-i18n="skillsTitle"></h2>
+            <p class="help small" data-i18n="skillsNote"></p>
+            <div id="skills"></div>
+        </section>
+
+        <section class="col gap-10">
+            <h2 data-i18n="interestsTitle"></h2>
+            <p class="help small" data-i18n="interestsNote"></p>
+            <div id="interests" class="chips"></div>
+        </section>
+
+        <section class="col gap-15">
+            <div class="col gap-5">
+                <h2 data-i18n="conditionsTitle"></h2>
+                <p class="help small" data-i18n="conditionsNote"></p>
+            </div>
+            <div class="field">
+                <span class="label" data-i18n="durationLabel"></span>
+                <div id="condition-duration" class="chips"></div>
+            </div>
+            <div class="field">
+                <span class="label" data-i18n="environmentLabel"></span>
+                <div id="condition-environment" class="chips"></div>
+            </div>
+            <div class="field">
+                <span class="label" data-i18n="intensityLabel"></span>
+                <div id="condition-intensity" class="chips"></div>
+            </div>
+            <div class="field">
+                <span class="label" data-i18n="materialsLabel"></span>
+                <div id="condition-materials" class="chips"></div>
+            </div>
+        </section>
+
+        <section class="col gap-10">
+            <button class="secondary add-child" data-i18n="addAnotherChild"></button>
+            <button id="child-delete" class="link red" data-i18n="deleteChild"></button>
+        </section>
+    </div>
 </section>
 
 <!-- ==========================================================================
@@ -92,6 +158,46 @@
         <span data-i18n="settings"></span>
     </button>
 </nav>
+
+<!-- ==========================================================================
+     ДИАЛОГИ
+     ========================================================================== -->
+
+<dialog id="child-dialog" class="sheet">
+    <form id="child-form" method="dialog" class="col gap-20">
+        <div class="row between">
+            <h2 id="child-form-title"></h2>
+            <button type="button" class="icon-button close" data-i18n-label="close">
+                <svg aria-hidden="true">
+                    <use href="icons/sprite.svg#close"></use>
+                </svg>
+            </button>
+        </div>
+        <label class="field">
+            <span class="label" data-i18n="name"></span>
+            <input id="child-name-input" class="input" required maxlength="40" pattern=".*\S.*" autocomplete="off">
+        </label>
+        <label class="field">
+            <span class="label" data-i18n="birthDate"></span>
+            <input id="child-birth-input" class="input" type="date" required>
+        </label>
+        <div class="field">
+            <span class="label" data-i18n="gender"></span>
+            <div id="child-gender" class="chips"></div>
+        </div>
+        <button class="primary" data-i18n="save"></button>
+    </form>
+</dialog>
+
+<dialog id="confirm-dialog" class="modal">
+    <form method="dialog" class="col gap-20">
+        <p id="confirm-text"></p>
+        <div class="row gap-10">
+            <button id="confirm-no" value="no" class="secondary grow" data-i18n="cancel"></button>
+            <button id="confirm-yes" value="yes" class="primary grow"></button>
+        </div>
+    </form>
+</dialog>
 
 <script src="script.js"></script>
 
