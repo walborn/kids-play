@@ -44,4 +44,23 @@
         <line x1="18" y1="6" x2="6" y2="18"/>
     </symbol>
 
+    <symbol id="download" viewBox="0 0 24 24">
+        <path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>
+    </symbol>
+
+    <symbol id="upload" viewBox="0 0 24 24">
+        <path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>
+    </symbol>
+
+    <symbol id="refresh" viewBox="0 0 24 24">
+        <path d="M17.8 8.4A6.4 6.4 0 0 0 6.5 6.3L5 8"/>
+        <path d="M5 4.5v3.7h3.7"/>
+        <path d="M6.2 15.6a6.4 6.4 0 0 0 11.3 2.1L19 16"/>
+        <path d="M19 19.5v-3.7h-3.7"/>
+    </symbol>
+
+    <symbol id="trash" viewBox="0 0 24 24">
+        <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>
+    </symbol>
+
 </svg>

@@ -80,7 +80,13 @@
      ========================================================================== -->
 
 <section id="history-page" class="page hidden">
-    <h1 data-i18n="history"></h1>
+    <div class="col gap-10">
+        <h1 data-i18n="history"></h1>
+        <div id="history-filter" class="chips"></div>
+        <select id="history-area" class="input" data-i18n-label="filterArea"></select>
+    </div>
+    <ul id="history-list" class="list"></ul>
+    <p id="history-empty" class="help hidden" data-i18n="historyEmpty"></p>
 </section>
 
 <!-- ==========================================================================
@@ -150,7 +156,41 @@
      ========================================================================== -->
 
 <section id="settings-page" class="page hidden">
-    <h1 data-i18n="settings"></h1>
+    <div class="col gap-15">
+        <h1 data-i18n="settings"></h1>
+        <div class="note col gap-10">
+            <p data-i18n="privacyNote"></p>
+            <p class="help small" data-i18n="disclaimer"></p>
+        </div>
+    </div>
+
+    <div class="menu">
+        <button id="export">
+            <svg aria-hidden="true">
+                <use href="icons/sprite.svg#download"></use>
+            </svg>
+            <span data-i18n="exportData"></span>
+        </button>
+        <button id="import">
+            <svg aria-hidden="true">
+                <use href="icons/sprite.svg#upload"></use>
+            </svg>
+            <span data-i18n="importData"></span>
+        </button>
+        <input id="import-input" type="file" accept="application/json,.json" hidden>
+        <button id="reset-preferences">
+            <svg aria-hidden="true">
+                <use href="icons/sprite.svg#refresh"></use>
+            </svg>
+            <span data-i18n="resetPreferences"></span>
+        </button>
+        <button id="delete-all" class="red">
+            <svg aria-hidden="true">
+                <use href="icons/sprite.svg#trash"></use>
+            </svg>
+            <span data-i18n="deleteAll"></span>
+        </button>
+    </div>
 </section>
 
 <!-- ==========================================================================

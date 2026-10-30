@@ -125,6 +125,8 @@ const INTEREST_SIGN = {liked: 1, disliked: -1};
 const DIFFICULTY_SIGN = {too_easy: 1, too_hard: -1};
 const INFERRED_HINT = 25; // inferred interest scores from this value are shown in the profile
 
+const DATA_LISTS = ["children", "recommendations", "feedback", "preferences"];
+
 // ==========================================================================
 // 2. TRANSLATIONS
 // ==========================================================================
@@ -289,6 +291,33 @@ const STRINGS = {
         difficulty: {easy: "Легко", medium: "Средне", challenging: "Посложнее"},
         environment: {home: "Дома", outdoors: "На улице", either: "Дома или на улице"},
         intensity: {calm: "Спокойное", active: "Подвижное"},
+
+        /* --- History --- */
+        historyFilters: {all: "Все", completed: "Выполненные", skipped: "Пропущенные"},
+        historyEmpty: "Здесь появятся занятия, которые предлагало приложение. Пропускать дни — нормально.",
+        unknownActivity: "Занятие удалено из каталога",
+
+        /* --- Settings --- */
+        privacyNote:
+            "Все данные хранятся только на этом устройстве, никуда не отправляются " +
+            "и не синхронизируются между устройствами. Чтобы перенести их, используйте экспорт и импорт.",
+        disclaimer:
+            "Приложение помогает выбрать занятие для игры и общения. Оно не ставит диагнозы, " +
+            "не оценивает развитие и не заменяет консультацию педиатра. Делайте столько занятий, " +
+            "сколько удобно вашей семье.",
+        exportData: "Экспорт данных",
+        importData: "Импорт данных",
+        resetPreferences: "Сбросить выводы из отзывов",
+        deleteAll: "Удалить все данные",
+        importError: "Не удалось прочитать файл. Выберите файл, сохранённый через «Экспорт данных».",
+        importQuestion: "Данные на этом устройстве будут заменены данными из файла. Продолжить?",
+        importConfirm: "Заменить",
+        resetQuestion: (name) =>
+            `Сбросить выводы из отзывов для профиля «${name}»? История занятий и ваши отметки интересов сохранятся.`,
+        resetConfirm: "Сбросить",
+        deleteAllQuestion:
+            "Удалить все профили, историю и настройки с этого устройства? Это действие нельзя отменить. " +
+            "Перед удалением можно сделать экспорт.",
 
         /* --- Vocabulary --- */
         areas: {
@@ -462,6 +491,19 @@ const todayStatus = $("today-status");
 const todayMain = $("today-main");
 const todayAnother = $("today-another");
 
+/* --- History --- */
+const historyFilterChips = $("history-filter");
+const historyArea = $("history-area");
+const historyList = $("history-list");
+const historyEmpty = $("history-empty");
+
+/* --- Settings --- */
+const exportButton = $("export");
+const importButton = $("import");
+const importInput = $("import-input");
+const resetPreferencesButton = $("reset-preferences");
+const deleteAllButton = $("delete-all");
+
 /* --- Child --- */
 const childNone = $("child-none");
 const childProfile = $("child-profile");
@@ -572,6 +614,31 @@ const saveData = () => {
 const updateData = (change) => {
     change(data);
     saveData();
+};
+
+const exportData = () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: "application/json"}));
+    el("a", {href: url, download: `child-activities-${dateKey()}.json`}).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+const isValidImport = (d) =>
+    Number.isInteger(d?.version) &&
+    d.version <= DATA_VERSION &&
+    DATA_LISTS.every((key) => Array.isArray(d[key])) &&
+    d.children.every(
+        (c) => c.id && c.name && /^\d{4}-\d{2}-\d{2}$/.test(c.birthDate) && Array.isArray(c.skills) && c.conditions,
+    );
+
+const importData = (imported) => {
+    data = {...emptyData(), ...imported};
+    if (!activeChild()) data.activeChildId = data.children[0]?.id ?? null;
+    saveData();
+};
+
+const deleteAllData = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    data = emptyData();
 };
 
 // ==========================================================================
@@ -884,6 +951,15 @@ const saveFeedback = (rec, fields) =>
         d.feedback.push(feedback);
         setStatus(rec, fields.status === "skipped" ? "not_completed" : fields.status);
         applyFeedback(feedback, findActivity(rec.activityId));
+    });
+
+// Forgets what was learned from feedback. History and manual interest marks stay.
+const resetInferredPreferences = (childId) =>
+    updateData((d) => {
+        d.preferences = d.preferences.filter((p) => p.childId !== childId || p.manual);
+        d.preferences.forEach((p) => {
+            if (p.childId === childId) p.score = 0;
+        });
     });
 
 // ==========================================================================
@@ -1328,20 +1404,115 @@ document.querySelectorAll(".add-child").forEach((button) => {
 });
 
 // ==========================================================================
-// 17. NAVIGATION
+// 17. HISTORY
+// ==========================================================================
+
+const HISTORY_FILTERS = {
+    all: () => true,
+    completed: (status) => status === "completed" || status === "partially_completed",
+    skipped: (status) => ["not_completed", "skipped", "replaced"].includes(status),
+};
+
+let historyFilter = "all";
+
+const historyItem = (rec) => {
+    const activity = findActivity(rec.activityId);
+    const comment = feedbackFor(rec.id)?.comment;
+    const thisYear = rec.date.startsWith(String(new Date().getFullYear()));
+    return el(
+        "li",
+        {},
+        el(
+            "button",
+            {className: "item", disabled: !activity, onclick: () => openActivity(activity)},
+            el("span", {
+                className: "help small",
+                textContent: formatDate(rec.date, {day: "numeric", month: "long", year: thisYear ? undefined : "numeric"}),
+            }),
+            el("span", {className: "item-title", textContent: activity?.title ?? S.unknownActivity}),
+            el("span", {className: "small", textContent: resultText(rec)}),
+            comment && el("span", {className: "help small", textContent: `«${comment}»`}),
+        ),
+    );
+};
+
+const renderHistory = () => {
+    const child = activeChild();
+    renderChoices(historyFilterChips, Object.keys(HISTORY_FILTERS), S.historyFilters, (f) => f === historyFilter, (f) => {
+        historyFilter = f;
+        renderHistory();
+    });
+    const area = historyArea.value;
+    const items = data.recommendations
+        .filter(
+            (r) =>
+                r.childId === child?.id &&
+                HISTORY_FILTERS[historyFilter](feedbackFor(r.id)?.status ?? r.status) &&
+                (!area || findActivity(r.activityId)?.areas.includes(area)),
+        )
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    historyList.replaceChildren(...items.map(historyItem));
+    historyEmpty.classList.toggle("hidden", items.length > 0);
+};
+
+historyArea.oninput = renderHistory;
+
+// ==========================================================================
+// 18. SETTINGS
+// ==========================================================================
+
+const renderSettings = () => {
+    resetPreferencesButton.disabled = !activeChild();
+};
+
+exportButton.onclick = exportData;
+importButton.onclick = () => importInput.click();
+
+importInput.onchange = async () => {
+    const file = importInput.files[0];
+    importInput.value = "";
+    if (!file) return;
+    let imported = null;
+    try {
+        imported = JSON.parse(await file.text());
+    } catch {
+        imported = null;
+    }
+    if (!isValidImport(imported)) return showMessage(S.importError);
+    confirmAction(S.importQuestion, S.importConfirm, () => {
+        importData(imported);
+        showPage("today");
+    });
+};
+
+resetPreferencesButton.onclick = () => {
+    const child = activeChild();
+    confirmAction(S.resetQuestion(child.name), S.resetConfirm, () => resetInferredPreferences(child.id));
+};
+
+deleteAllButton.onclick = () =>
+    confirmAction(S.deleteAllQuestion, S.delete, () => {
+        deleteAllData();
+        showPage("today");
+    });
+
+// ==========================================================================
+// 19. NAVIGATION
 // ==========================================================================
 
 const renderers = {
     today: renderToday,
     activities: renderActivities,
+    history: renderHistory,
     child: renderChild,
+    settings: renderSettings,
 };
 
 let currentPage = "today";
 
 const render = () => {
     renderHeader();
-    renderers[currentPage]?.();
+    renderers[currentPage]();
 };
 
 const showPage = (name) => {
@@ -1363,12 +1534,13 @@ nav.onclick = (e) => {
 };
 
 // ==========================================================================
-// 18. INIT
+// 20. INIT
 // ==========================================================================
 
 (async () => {
     translatePage();
     fillFilters();
+    historyArea.append(...areaOptions());
     loadData();
     await loadCatalogue();
     showPage("today");

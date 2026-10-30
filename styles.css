@@ -562,6 +562,41 @@ dialog::backdrop {
     font-size: 15px;
 }
 
+/* История */
+.item:disabled {
+    cursor: default;
+}
+
+/* Настройки */
+.note {
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    background: var(--head);
+}
+
+.menu {
+    display: flex;
+    flex-direction: column;
+    margin-top: 16px;
+}
+
+.menu button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+}
+
+.menu button:last-child {
+    border-bottom: 0;
+}
+
+.menu .red svg {
+    stroke: var(--red);
+}
+
 /* Навыки */
 .skill {
     display: grid;
