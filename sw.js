@@ -1,5 +1,5 @@
 const APP_PREFIX = "kids-play";
-const CACHE_VERSION = "1";
+const CACHE_VERSION = "2";
 const CACHE = `${APP_PREFIX}-${CACHE_VERSION}`;
 
 const APP_SHELL = [

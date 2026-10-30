@@ -139,6 +139,7 @@ const STRINGS = {
         locale: "ru-RU",
         appName: "Занятия с ребёнком",
         units: {days: "дн.", weeks: "нед.", months: "мес.", years: "г.", minutes: "мин"},
+        firstDay: "первый день",
 
         /* --- Navigation --- */
         navigation: "Основная навигация",
@@ -157,12 +158,19 @@ const STRINGS = {
         storageError: "Не удалось сохранить данные: в браузере закончилось место.",
 
         /* --- Today --- */
-        noActivityTitle: "Сейчас нет подходящих занятий",
+        welcomeTitle: "Идея для игры с малышом на каждый день",
+        welcomeText:
+            "Расскажите о ребёнке, и приложение будет предлагать одно занятие в день " +
+            "с учётом возраста, навыков и интересов.",
+        localDataNote: "Данные хранятся только на этом устройстве и никуда не отправляются.",
+        noActivityTitle: "Сегодня подходящих занятий нет",
         noActivityText:
             "Приложение предлагает только занятия, которые подходят по возрасту и условиям " +
-            "и прошли проверку безопасности. Сейчас таких нет. Можно посмотреть каталог " +
-            "или изменить условия в профиле ребёнка.",
+            "и прошли проверку безопасности. Сейчас таких нет. Посмотрите каталог " +
+            "или измените условия в профиле ребёнка.",
+        noActivityForAge: (max) => `Сейчас в каталоге есть занятия для детей до ${max} мес.`,
         browseCatalogue: "Открыть каталог",
+        changeConditions: "Изменить условия",
         moreDetails: "Подробнее о занятии",
         start: "Начать",
         finish: "Завершить",
@@ -212,9 +220,6 @@ const STRINGS = {
             not_suitable: "Не подходит",
             other: "Другое",
         },
-        welcomeTitle: "Здравствуйте!",
-        welcomeText: "Добавьте профиль ребёнка, и приложение будет каждый день предлагать одно подходящее занятие.",
-        localDataNote: "Все данные хранятся только на этом устройстве и никуда не отправляются.",
 
         /* --- Child profile --- */
         selectChild: "Выбрать ребёнка",
@@ -223,9 +228,12 @@ const STRINGS = {
         addAnotherChild: "Добавить ещё ребёнка",
         newChild: "Новый ребёнок",
         editChild: "Профиль ребёнка",
+        profileTitle: "Профиль",
+        age: "Возраст",
         name: "Имя",
         birthDate: "Дата рождения",
         gender: "Пол (необязательно)",
+        genderTitle: "Пол",
         genders: {unspecified: "Не указан", female: "Девочка", male: "Мальчик"},
         deleteChild: "Удалить профиль",
         deleteChildQuestion: (name) =>
@@ -238,8 +246,8 @@ const STRINGS = {
         observed: (n) => (n ? `отмечено: ${n}` : ""),
         interestsTitle: "Интересы",
         interestsNote:
-            "Нажмите, чтобы отметить: нравится → не нравится → не указано. " +
-            "Стрелки ↑ и ↓ показывают выводы из отзывов, ваша отметка всегда важнее.",
+            "Одно нажатие — нравится, второе — не нравится, третье снимает отметку. " +
+            "Стрелки ↑ и ↓ — то, что приложение заметило по отзывам. Ваша отметка всегда важнее.",
         interestStates: {
             like: "нравится",
             dislike: "не нравится",
@@ -271,8 +279,10 @@ const STRINGS = {
         catalogueError:
             "Не удалось загрузить каталог занятий. Подключитесь к интернету и откройте приложение снова.",
         catalogueStatus: (reviewed, total) =>
-            `Проверено на безопасность: ${reviewed} из ${total}. ` +
-            "Непроверенные занятия видны в каталоге, но не попадают в рекомендации.",
+            reviewed === total
+                ? "Все занятия в каталоге проверены на безопасность."
+                : `Проверено на безопасность: ${reviewed} из ${total}. ` +
+                  "Непроверенные занятия видны в каталоге, но не попадают в рекомендации.",
         ageRange: (min, max) => `${min}–${max} мес.`,
         notReviewed: "Не проверено",
         disabled: "Отключено",
@@ -281,6 +291,9 @@ const STRINGS = {
         disabledNote: "Это занятие отключено и не попадает в рекомендации.",
         goal: "Цель",
         duration: "Время",
+        place: "Где",
+        character: "Характер",
+        difficultyTitle: "Сложность",
         materialsTitle: "Материалы",
         noMaterials: "Ничего не нужно",
         instructions: "Как играть",
@@ -293,6 +306,7 @@ const STRINGS = {
         difficulty: {easy: "Легко", medium: "Средне", challenging: "Посложнее"},
         environment: {home: "Дома", outdoors: "На улице", either: "Дома или на улице"},
         intensity: {calm: "Спокойное", active: "Подвижное"},
+        historyFilterLabel: "Показать",
 
         /* --- History --- */
         historyFilters: {all: "Все", completed: "Выполненные", skipped: "Пропущенные"},
@@ -426,6 +440,7 @@ const parseDate = (key) => {
 
 const formatDate = (key, options) => parseDate(key).toLocaleDateString(S.locale, options);
 
+
 // Day numbers come from UTC so that daylight saving changes never shift them
 const dayNumber = (key) => {
     const [y, m, d] = key.split("-").map(Number);
@@ -453,7 +468,7 @@ const formatAge = (birthDate) => {
     const {months, days} = ageOf(birthDate);
     const weeks = Math.floor(days / 7);
     const u = S.units;
-    if (months === 0) return weeks ? `${weeks} ${u.weeks}` : `${days} ${u.days}`;
+    if (months === 0) return weeks ? `${weeks} ${u.weeks}` : days ? `${days} ${u.days}` : S.firstDay;
     if (months < 3 && weeks) return `${months} ${u.months} ${weeks} ${u.weeks}`;
     if (months < 24) return `${months} ${u.months}`;
     const rest = months % 12;
@@ -469,6 +484,23 @@ const el = (tag, props, ...children) => {
 };
 
 const normalize = (text) => text.toLowerCase().replaceAll("ё", "е");
+
+const capitalize = (text) => text.charAt(0).toLocaleUpperCase(S.locale) + text.slice(1);
+
+// "Сегодня", "Вчера" or a date; the year only when it is not the current one
+const formatDay = (key) => {
+    const ago = daysBetween(key, dateKey());
+    if (ago === 0 || ago === 1) return capitalize(new Intl.RelativeTimeFormat(S.locale, {numeric: "auto"}).format(-ago, "day"));
+    const thisYear = key.startsWith(String(new Date().getFullYear()));
+    return formatDate(key, {day: "numeric", month: "long", year: thisYear ? undefined : "numeric"});
+};
+
+// Joins labels into one phrase: "Выполнено, понравилось, в самый раз"
+const phrase = (parts) =>
+    parts
+        .filter(Boolean)
+        .map((part, i) => (i ? part.toLocaleLowerCase(S.locale) : part))
+        .join(", ");
 
 // ==========================================================================
 // 4. DOM ELEMENTS
@@ -492,6 +524,8 @@ const todayDetails = $("today-details");
 const todayStatus = $("today-status");
 const todayMain = $("today-main");
 const todayAnother = $("today-another");
+const openCatalogue = $("open-catalogue");
+const changeConditions = $("change-conditions");
 
 /* --- History --- */
 const historyFilterChips = $("history-filter");
@@ -509,7 +543,6 @@ const deleteAllButton = $("delete-all");
 /* --- Child --- */
 const childNone = $("child-none");
 const childProfile = $("child-profile");
-const childName = $("child-name");
 const childInfo = $("child-info");
 const childEdit = $("child-edit");
 const childDelete = $("child-delete");
@@ -639,8 +672,11 @@ const importData = (imported) => {
     saveData();
 };
 
+// Also removes copies of unreadable data kept by loadData
 const deleteAllData = () => {
-    localStorage.removeItem(STORAGE_KEY);
+    Object.keys(localStorage)
+        .filter((key) => key.startsWith(STORAGE_KEY))
+        .forEach((key) => localStorage.removeItem(key));
     data = emptyData();
 };
 
@@ -969,10 +1005,18 @@ const resetInferredPreferences = (childId) =>
 // 11. UI COMPONENTS
 // ==========================================================================
 
+// Re-renders a group of buttons and keeps keyboard focus on the same position
+const replaceButtons = (container, buttons) => {
+    const focused = [...container.children].indexOf(document.activeElement);
+    container.replaceChildren(...buttons);
+    container.children[focused]?.focus();
+};
+
 // Chips for single or multiple choice
 const renderChoices = (container, options, labels, isSelected, onSelect) =>
-    container.replaceChildren(
-        ...options.map((option) =>
+    replaceButtons(
+        container,
+        options.map((option) =>
             el("button", {
                 type: "button",
                 className: isSelected(option) ? "tap selected" : "tap",
@@ -1029,28 +1073,35 @@ childSelect.onchange = () => {
 
 let todayRec = null;
 
-// Status and the observations from feedback, if any: "Выполнено · Понравилось · В самый раз"
+// An older child is the one case the generic explanation does not cover
+const emptyReason = (child) => {
+    const months = child && ageOf(child.birthDate).months;
+    const maxAge = Math.max(...catalogue.map((a) => a.ageMaxMonths));
+    return catalogue.length && months > maxAge ? S.noActivityForAge(maxAge) : S.noActivityText;
+};
+
+// Status and the observations from feedback, if any
 const resultText = (rec) => {
     const fb = feedbackFor(rec.id);
-    return [
+    return phrase([
         S.statuses[fb?.status ?? rec.status],
         fb && fb.interest !== "not_observed" && S.interestFeedback[fb.interest],
         fb && fb.difficulty !== "not_observed" && S.difficultyFeedback[fb.difficulty],
         fb?.reason && S.reasons[fb.reason],
-    ]
-        .filter(Boolean)
-        .join(" · ");
+    ]);
 };
 
 const renderToday = () => {
-    todayDate.textContent = formatDate(dateKey(), {weekday: "long", day: "numeric", month: "long"});
+    todayDate.textContent = capitalize(formatDate(dateKey(), {weekday: "long", day: "numeric", month: "long"}));
     const child = activeChild();
     // without the catalogue the stored recommendation cannot be checked, so it is left untouched
     todayRec = child && !catalogueError ? todayRecommendation(child) : null;
     welcome.classList.toggle("hidden", !!child);
+    todayDate.classList.toggle("hidden", !child);
     todayEmpty.classList.toggle("hidden", !child || !!todayRec);
     todayActivity.classList.toggle("hidden", !todayRec);
-    todayEmptyText.textContent = catalogueError ? S.catalogueError : S.noActivityText;
+    todayEmptyText.textContent = catalogueError ? S.catalogueError : emptyReason(child);
+    changeConditions.classList.toggle("hidden", catalogueError);
     if (!todayRec) return;
 
     const {status} = todayRec;
@@ -1077,7 +1128,8 @@ todayAnother.onclick = () => {
 
 todayDetails.onclick = () => openActivity(findActivity(todayRec.activityId));
 
-$("open-catalogue").onclick = () => showPage("activities");
+openCatalogue.onclick = () => showPage("activities");
+changeConditions.onclick = () => showPage("child");
 
 /* --- Feedback form --- */
 
@@ -1119,11 +1171,23 @@ feedbackForm.onsubmit = () => {
 // 14. ACTIVITY DETAILS
 // ==========================================================================
 
-const block = (title, ...content) => el("section", {className: "block"}, el("h3", {textContent: title}), ...content);
+const block = (title, content, className = "") =>
+    el("section", {className: `block ${className}`}, el("h3", {textContent: title}), content);
 
-const listOf = (tag, items) => el(tag, {}, ...items.map((text) => el("li", {textContent: text})));
+const listOf = (tag, className, items) => el(tag, {className}, ...items.map((text) => el("li", {textContent: text})));
 
-const fact = (term, text) => [el("dt", {textContent: term}), el("dd", {textContent: text})];
+const areaMarks = (a) =>
+    el(
+        "span",
+        {className: "areas"},
+        ...a.areas.map((area) => el("span", {className: `area area-${area}`, textContent: S.areas[area]})),
+    );
+
+// Rows of a definition list from [term, text] pairs; false rows are skipped
+const factRows = (rows) =>
+    rows.filter(Boolean).flatMap(([term, text]) => [el("dt", {textContent: term}), el("dd", {textContent: text})]);
+
+const facts = (rows) => el("dl", {className: "facts"}, ...factRows(rows));
 
 const ageRangeText = (a) => S.ageRange(a.ageMinMonths, a.ageMaxMonths);
 
@@ -1140,52 +1204,38 @@ const externalLinks = (links) =>
                     el("a", {href: url, target: "_blank", rel: "noopener noreferrer", textContent: title}),
                     el("span", {
                         className: "help small",
-                        textContent: [sourceName, language, duration].filter(Boolean).join(" · "),
+                        textContent: [sourceName, language, duration].filter(Boolean).join(", "),
                     }),
                 ),
             ),
     );
 
 // Full details for the dialog, a compact version for the Today screen
-const activityContent = (a, full) => [
-    full &&
-        el("p", {
-            className: "help small",
-            textContent: [
-                ageRangeText(a),
-                S.difficulty[a.difficulty],
-                S.environment[a.environment],
-                S.intensity[a.intensity],
-                ...a.areas.map((area) => S.areas[area]),
-            ].join(" · "),
-        }),
-    full &&
-        !isAvailable(a) &&
-        el("p", {className: "warning", textContent: a.enabled ? S.notReviewedNote : S.disabledNote}),
-    el(full ? "h2" : "h1", {textContent: a.title}),
-    el("p", {className: "lead", textContent: a.description}),
-    el(
-        "dl",
-        {className: "facts"},
-        ...fact(S.goal, a.goal),
-        ...fact(S.duration, `${a.duration} ${S.units.minutes}`),
-        ...fact(S.materialsTitle, a.materials.map((m) => S.materials[m]).join(", ") || S.noMaterials),
-    ),
-    block(S.instructions, listOf("ol", a.instructions)),
-    full &&
-        a.variations &&
-        block(
-            S.variations,
-            el(
-                "dl",
-                {className: "facts"},
-                ...["easier", "harder"].filter((key) => a.variations[key]).flatMap((key) => fact(S[key], a.variations[key])),
-            ),
-        ),
-    block(S.safety, listOf("ul", a.safety)),
-    a.videos.length > 0 && block(S.videos, externalLinks(a.videos)),
-    full && a.sources.length > 0 && block(S.sources, externalLinks(a.sources)),
-].filter(Boolean);
+const activityContent = (a, full) =>
+    [
+        full &&
+            !isAvailable(a) &&
+            el("p", {className: "warning", textContent: a.enabled ? S.notReviewedNote : S.disabledNote}),
+        areaMarks(a),
+        el(full ? "h2" : "h1", {textContent: a.title}),
+        el("p", {className: "lead", textContent: a.description}),
+        facts([
+            [S.goal, a.goal],
+            full && [S.age, ageRangeText(a)],
+            [S.duration, `${a.duration} ${S.units.minutes}`],
+            full && [S.place, S.environment[a.environment]],
+            full && [S.character, S.intensity[a.intensity]],
+            full && [S.difficultyTitle, S.difficulty[a.difficulty]],
+            [S.materialsTitle, phrase(a.materials.map((m) => S.materials[m])) || S.noMaterials],
+        ]),
+        block(S.instructions, listOf("ol", "steps", a.instructions)),
+        full &&
+            a.variations &&
+            block(S.variations, facts(["easier", "harder"].map((key) => a.variations[key] && [S[key], a.variations[key]]))),
+        block(S.safety, listOf("ul", "bullets", a.safety), "safety"),
+        a.videos.length > 0 && block(S.videos, externalLinks(a.videos)),
+        full && a.sources.length > 0 && block(S.sources, externalLinks(a.sources)),
+    ].filter(Boolean);
 
 const openActivity = (activity) => {
     activityBody.replaceChildren(...activityContent(activity, true));
@@ -1228,13 +1278,11 @@ const activityItem = (a) =>
             el(
                 "span",
                 {className: "item-title"},
-                a.title,
+                el("span", {textContent: a.title}),
                 !isAvailable(a) && el("span", {className: "badge", textContent: a.enabled ? S.notReviewed : S.disabled}),
             ),
-            el("span", {
-                className: "help small",
-                textContent: [ageRangeText(a), `${a.duration} ${S.units.minutes}`, ...a.areas.map((x) => S.areas[x])].join(" · "),
-            }),
+            el("span", {className: "help small", textContent: phrase([ageRangeText(a), `${a.duration} ${S.units.minutes}`])}),
+            areaMarks(a),
         ),
     );
 
@@ -1315,8 +1363,9 @@ const interestState = (p) =>
     p?.manual ?? (p?.score >= INFERRED_HINT ? "inferredLike" : p?.score <= -INFERRED_HINT ? "inferredDislike" : null);
 
 const renderInterests = (child) =>
-    interestsList.replaceChildren(
-        ...INTERESTS.map((tag) => {
+    replaceButtons(
+        interestsList,
+        INTERESTS.map((tag) => {
             const state = interestState(findPreference(child.id, "interest", tag));
             return el("button", {
                 type: "button",
@@ -1350,14 +1399,14 @@ const renderChild = () => {
     childNone.classList.toggle("hidden", !!child);
     childProfile.classList.toggle("hidden", !child);
     if (!child) return;
-    childName.textContent = child.name;
-    childInfo.textContent = [
-        formatDate(child.birthDate, {day: "numeric", month: "long", year: "numeric"}),
-        formatAge(child.birthDate),
-        child.gender !== "unspecified" && S.genders[child.gender],
-    ]
-        .filter(Boolean)
-        .join(" · ");
+    childInfo.replaceChildren(
+        ...factRows([
+            [S.name, child.name],
+            [S.birthDate, formatDate(child.birthDate, {day: "numeric", month: "long", year: "numeric"})],
+            [S.age, formatAge(child.birthDate)],
+            child.gender !== "unspecified" && [S.genderTitle, S.genders[child.gender]],
+        ]),
+    );
     renderSkills(child);
     renderInterests(child);
     renderConditions(child);
@@ -1421,7 +1470,6 @@ let historyFilter = "all";
 const historyItem = (rec) => {
     const activity = findActivity(rec.activityId);
     const comment = feedbackFor(rec.id)?.comment;
-    const thisYear = rec.date.startsWith(String(new Date().getFullYear()));
     return el(
         "li",
         {},
@@ -1430,11 +1478,11 @@ const historyItem = (rec) => {
             {className: "item", disabled: !activity, onclick: () => openActivity(activity)},
             el("span", {
                 className: "help small",
-                textContent: formatDate(rec.date, {day: "numeric", month: "long", year: thisYear ? undefined : "numeric"}),
+                textContent: formatDay(rec.date),
             }),
             el("span", {className: "item-title", textContent: activity?.title ?? S.unknownActivity}),
             el("span", {className: "small", textContent: resultText(rec)}),
-            comment && el("span", {className: "help small", textContent: `«${comment}»`}),
+            comment && el("span", {className: "help small item-quote", textContent: `«${comment}»`}),
         ),
     );
 };

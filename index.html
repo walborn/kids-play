@@ -4,7 +4,8 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
     <meta name="theme-color" content="#f7f6f4" media="(prefers-color-scheme: light)"/>
-    <meta name="theme-color" content="#2a2a2a" media="(prefers-color-scheme: dark)"/>
+    <meta name="theme-color" content="#262626" media="(prefers-color-scheme: dark)"/>
+    <meta name="description" content="Идея для игры с малышом на каждый день. Работает офлайн, данные остаются на устройстве."/>
 
     <title>Занятия с ребёнком</title>
 
@@ -21,6 +22,8 @@
     <span id="child-age" class="help"></span>
 </header>
 
+<main>
+
 <!-- ==========================================================================
      СЕГОДНЯ
      ========================================================================== -->
@@ -29,6 +32,9 @@
     <p id="today-date" class="help"></p>
 
     <div id="welcome" class="col gap-15 hidden">
+        <svg class="hero-blocks" aria-hidden="true">
+            <use href="icons/sprite.svg#blocks"></use>
+        </svg>
         <h1 data-i18n="welcomeTitle"></h1>
         <p data-i18n="welcomeText"></p>
         <p class="help small" data-i18n="localDataNote"></p>
@@ -39,6 +45,7 @@
         <h2 data-i18n="noActivityTitle"></h2>
         <p id="today-empty-text"></p>
         <button id="open-catalogue" class="secondary" data-i18n="browseCatalogue"></button>
+        <button id="change-conditions" class="link" data-i18n="changeConditions"></button>
     </div>
 
     <div id="today-activity" class="col gap-10 hidden">
@@ -82,7 +89,7 @@
 <section id="history-page" class="page hidden">
     <div class="col gap-10">
         <h1 data-i18n="history"></h1>
-        <div id="history-filter" class="chips"></div>
+        <div id="history-filter" class="chips" role="group" data-i18n-label="historyFilterLabel"></div>
         <select id="history-area" class="input" data-i18n-label="filterArea"></select>
     </div>
     <ul id="history-list" class="list"></ul>
@@ -101,12 +108,12 @@
     </div>
 
     <div id="child-profile" class="col gap-30">
-        <section class="col gap-5">
+        <section class="col gap-10">
             <div class="row between">
-                <h1 id="child-name"></h1>
+                <h1 data-i18n="profileTitle"></h1>
                 <button id="child-edit" class="link" data-i18n="edit"></button>
             </div>
-            <p id="child-info" class="help"></p>
+            <dl id="child-info" class="facts"></dl>
         </section>
 
         <section class="col gap-10">
@@ -118,7 +125,7 @@
         <section class="col gap-10">
             <h2 data-i18n="interestsTitle"></h2>
             <p class="help small" data-i18n="interestsNote"></p>
-            <div id="interests" class="chips"></div>
+            <div id="interests" class="chips" role="group" data-i18n-label="interestsTitle"></div>
         </section>
 
         <section class="col gap-15">
@@ -128,19 +135,19 @@
             </div>
             <div class="field">
                 <span class="label" data-i18n="durationLabel"></span>
-                <div id="condition-duration" class="chips"></div>
+                <div id="condition-duration" class="chips" role="group" data-i18n-label="durationLabel"></div>
             </div>
             <div class="field">
                 <span class="label" data-i18n="environmentLabel"></span>
-                <div id="condition-environment" class="chips"></div>
+                <div id="condition-environment" class="chips" role="group" data-i18n-label="environmentLabel"></div>
             </div>
             <div class="field">
                 <span class="label" data-i18n="intensityLabel"></span>
-                <div id="condition-intensity" class="chips"></div>
+                <div id="condition-intensity" class="chips" role="group" data-i18n-label="intensityLabel"></div>
             </div>
             <div class="field">
                 <span class="label" data-i18n="materialsLabel"></span>
-                <div id="condition-materials" class="chips"></div>
+                <div id="condition-materials" class="chips" role="group" data-i18n-label="materialsLabel"></div>
             </div>
         </section>
 
@@ -192,6 +199,8 @@
         </button>
     </div>
 </section>
+
+</main>
 
 <!-- ==========================================================================
      НАВИГАЦИЯ
@@ -257,21 +266,21 @@
         </div>
         <div class="field">
             <span class="label" data-i18n="feedbackStatus"></span>
-            <div id="fb-status" class="chips"></div>
+            <div id="fb-status" class="chips" role="group" data-i18n-label="feedbackStatus"></div>
         </div>
         <div id="fb-observed" class="col gap-20">
             <div class="field">
                 <span class="label" data-i18n="feedbackInterest"></span>
-                <div id="fb-interest" class="chips"></div>
+                <div id="fb-interest" class="chips" role="group" data-i18n-label="feedbackInterest"></div>
             </div>
             <div class="field">
                 <span class="label" data-i18n="feedbackDifficulty"></span>
-                <div id="fb-difficulty" class="chips"></div>
+                <div id="fb-difficulty" class="chips" role="group" data-i18n-label="feedbackDifficulty"></div>
             </div>
         </div>
         <div id="fb-reason-field" class="field">
             <span class="label" data-i18n="feedbackReason"></span>
-            <div id="fb-reason" class="chips"></div>
+            <div id="fb-reason" class="chips" role="group" data-i18n-label="feedbackReason"></div>
         </div>
         <label class="field">
             <span class="label" data-i18n="comment"></span>
@@ -302,7 +311,7 @@
         </label>
         <div class="field">
             <span class="label" data-i18n="gender"></span>
-            <div id="child-gender" class="chips"></div>
+            <div id="child-gender" class="chips" role="group" data-i18n-label="gender"></div>
         </div>
         <button class="primary" data-i18n="save"></button>
     </form>
